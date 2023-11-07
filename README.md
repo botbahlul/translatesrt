@@ -1,7 +1,7 @@
 # translatesrt <a href="https://pypi.python.org/pypi/translatesrt"><img src="https://img.shields.io/pypi/v/translatesrt.svg"></img></a>
 
-### Translate subtitle file to another language
-translatesrt is a simple command line tool made with python to translate subtitle file to another language.
+### Translate subtitle files into another language
+translatesrt is a simple command line tool made with python to translate subtitle files to another language.
 
 ### Installation
 If you don't have python on your Windows system you can get compiled version from this git release assets
@@ -66,10 +66,12 @@ translatesrt "Episode 1.srt" -S en -D id
 ### Usage
 
 ```
-usage: translatesrt [-h] [-S SRC_LANGUAGE] [-D DST_LANGUAGE] [-ll] [-F FORMAT] [-lf] [-C CONCURRENCY] [-v] [subtitle_file_path]
+usage: translatesrt.py [-h] [-S SRC_LANGUAGE] [-D DST_LANGUAGE] [-ll] [-F FORMAT] [-lf] [-C CONCURRENCY] [-v]
+                       [subtitle_file_path ...]
 
 positional arguments:
-  subtitle_file_path    Subtitle file path you want to translate
+  subtitle_file_path    Subtitle file path you want to translate (use wildcard for multiple files or separate them with a space
+                        character e.g. "file 1.srt" "file 2.srt")
 
 options:
   -h, --help            show this help message and exit
