@@ -15,9 +15,14 @@ import pysrt
 import six
 # ADDITIONAL IMPORT
 from datetime import datetime, timedelta
+import time
+from glob import glob, escape
+from pathlib import Path
+import shlex
+import shutil
 
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 
 class Language:
@@ -1209,9 +1214,45 @@ def show_error_messages(messages):
     print(messages)
 
 
+def is_valid_subtitle_file(subtitle_filepath, error_messages_callback=None):
+    base, ext = os.path.splitext(subtitle_filepath)
+    timed_subtitles = []
+    is_valid_subtitle = False
+
+    if "\\" in subtitle_filepath:
+        subtitle_filepath = subtitle_filepath.replace("\\", "/")
+
+    if not os.path.isfile(subtitle_filepath):
+        if error_messages_callback:
+           error_messages_callback(f"The given file does not exist: '{subtitle_filepath}'")
+        else:
+            print(f"The given file does not exist: '{subtitle_filepath}'")
+            raise Exception(f"Invalid file: '{subtitle_filepath}'")
+
+    if ext[1:] == "srt" or ext[1:] == "SRT":
+        srt_reader = SRTFileReader()
+        timed_subtitles = srt_reader(subtitle_filepath)
+    elif ext[1:] == "vtt" or ext[1:] == "VTT":
+        vtt_reader = VTTFileReader()
+        timed_subtitles = vtt_reader(subtitle_filepath)
+    elif ext[1:] == "json" or ext[1:] == "JSON":
+        json_reader = JSONFileReader()
+        timed_subtitles = json_reader(subtitle_filepath)
+    elif ext[1:] == "raw" or ext[1:] == "RAW":
+        raw_reader = RAWFileReader()
+        timed_subtitles = raw_reader(subtitle_filepath)
+
+    if timed_subtitles:
+        #print(timed_subtitles)
+        is_valid_subtitle = True
+    else:
+        is_valid_subtitle = False
+    return is_valid_subtitle
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('subtitle_file_path', help="Subtitle file path you want to translate", nargs='?')
+    parser.add_argument('subtitle_file_path', help="Subtitle file path you want to translate", nargs='*')
     parser.add_argument('-S', '--src-language', help="Language code of subtitle file you want to translate", default="en")
     parser.add_argument('-D', '--dst-language', help="Desired translation language code for the subtitles", default=None)
     parser.add_argument('-ll', '--list-languages', help="List all supported languages", action='store_true')
@@ -1258,93 +1299,189 @@ def main():
         parser.print_help(sys.stderr)
         return 1
 
-    if do_translate == True:
-        subtitle_format = args.format
-        base, ext = os.path.splitext(args.subtitle_file_path)
+    completed_tasks = 0
+    subtitle_filepaths = []
+    arg_filepaths = []
+    invalid_subtitle_filepaths = []
+    not_exist_subtitle_filepaths = []
+    argpath = None
+    args_subtitle_file_path = args.subtitle_file_path
+
+    if (not "*" in str(args_subtitle_file_path)) and (not "?" in str(args_subtitle_file_path)):
+        for filepath in args_subtitle_file_path:
+            fpath = Path(filepath)
+            #print("fpath = %s" %fpath)
+            if not os.path.isfile(fpath):
+                not_exist_subtitle_filepaths.append(filepath)
+                #print(str(fpath) + " is not exist")
+
+    if sys.platform == "win32":
+        for i in range(len(args.subtitle_file_path)):
+            if ("[" or "]") in args.subtitle_file_path[i]:
+                placeholder = "#TEMP#"
+                args_subtitle_file_path[i] = args.subtitle_file_path[i].replace("[", placeholder)
+                args_subtitle_file_path[i] = args_subtitle_file_path[i].replace("]", "[]]")
+                args_subtitle_file_path[i] = args_subtitle_file_path[i].replace(placeholder, "[[]")
+                #print("args_subtitle_file_path = %s" %(args_subtitle_file_path))
+
+    for arg in args_subtitle_file_path:
+        if not sys.platform == "win32" :
+            arg = escape(arg)
+
+        #print("glob(arg) = %s" %(glob(arg)))
+
+        arg_filepaths += glob(arg)
+        #print("arg_filepaths = %s" %(arg_filepaths))
+
+    if arg_filepaths:
+        for argpath in arg_filepaths:
+            #print("argpath = ", argpath)
+            if os.path.isfile(argpath):
+                if is_valid_subtitle_file(argpath, error_messages_callback=show_error_messages) == True:
+                    subtitle_filepaths.append(argpath)
+                else:
+                    invalid_subtitle_filepaths.append(argpath)
+            else:
+                not_exist_subtitle_filepaths.append(argpath)
+
+        if invalid_subtitle_filepaths:
+            for invalid_subtitle_filepath in invalid_subtitle_filepaths:
+                msg = f"'{invalid_subtitle_filepath}' is not valid subtitle files"
+                print(msg)
+
+    #print("not_exist_subtitle_filepaths = %s" %(not_exist_subtitle_filepaths))
+
+    if not_exist_subtitle_filepaths:
+        if (not "*" in str(args_subtitle_file_path)) and (not "?" in str(args_subtitle_file_path)):
+            for not_exist_subtitle_filepaths in not_exist_subtitle_filepaths:
+                msg = f"'{not_exist_subtitle_filepaths}' is not exist"
+                print(msg)
+                sys.exit(0)
+
+    if not arg_filepaths and not not_exist_subtitle_filepaths:
+        print("No any files matching filenames you typed")
+        sys.exit(0)
+
+    subtitle_format = args.format
+
+    translate_end_time = None
+    translate_elapsed_time = None
+    translate_start_time = time.time()
+
+    #print("subtitle_filepaths = ", subtitle_filepaths)
+
+    for subtitle_filepath in subtitle_filepaths:
+        print(f"Processing '{subtitle_filepath}'")
+        base, ext = os.path.splitext(subtitle_filepath)
         timed_subtitles = []
 
         if ext[1:] == "srt" or ext[1:] == "SRT":
             srt_reader = SRTFileReader()
-            timed_subtitles = srt_reader(args.subtitle_file_path)
+            timed_subtitles = srt_reader(subtitle_filepath)
         elif ext[1:] == "vtt" or ext[1:] == "VTT":
             vtt_reader = VTTFileReader()
-            timed_subtitles = vtt_reader(args.subtitle_file_path)
+            timed_subtitles = vtt_reader(subtitle_filepath)
         elif ext[1:] == "json" or ext[1:] == "JSON":
             json_reader = JSONFileReader()
-            timed_subtitles = json_reader(args.subtitle_file_path)
+            timed_subtitles = json_reader(subtitle_filepath)
         elif ext[1:] == "raw" or ext[1:] == "RAW":
             raw_reader = RAWFileReader()
-            timed_subtitles = raw_reader(args.subtitle_file_path)
+            timed_subtitles = raw_reader(subtitle_filepath)
 
-        if timed_subtitles and ext[1:] != ("raw" or "RAW"):
-            regions = []
-            transcripts = []
-            for entry in timed_subtitles:
-                regions.append(entry[0])
-                transcripts.append(entry[1])
+        #print("timed_subtitles = ", timed_subtitles)
 
-            prompt = "Translating from %s to %s   : " %(args.src_language.center(8), args.dst_language.center(8))
-            widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
-            pbar = ProgressBar(widgets=widgets, maxval=len(timed_subtitles)).start()
+        regions = []
+        transcripts = []
 
-            transcript_translator = SentenceTranslator(src=args.src_language, dst=args.dst_language, error_messages_callback=show_error_messages)
+        for entry in timed_subtitles:
+            regions.append(entry[0])
+            transcripts.append(entry[1])
 
-            pool = multiprocessing.Pool(args.concurrency)
+        if do_translate == True:
 
-            translated_transcripts = []
-            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
-                translated_transcripts.append(translated_transcript)
-                pbar.update(i)
-            pbar.finish()
+            if timed_subtitles and ext[1:] != ("raw" or "RAW"):
+                prompt = "Translating from %s to %s   : " %(args.src_language.center(8), args.dst_language.center(8))
+                widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
+                pbar = ProgressBar(widgets=widgets, maxval=len(timed_subtitles)).start()
 
-            dst_subtitle_filepath = f"{base}.{args.dst_language}.{subtitle_format}"
+                transcript_translator = SentenceTranslator(src=args.src_language, dst=args.dst_language, error_messages_callback=show_error_messages)
 
-            translation_writer = SubtitleWriter(regions, translated_transcripts, subtitle_format, error_messages_callback=show_error_messages)
-            translation_writer.write(dst_subtitle_filepath)
+                pool = multiprocessing.Pool(args.concurrency)
 
-            print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+                translated_transcripts = []
+                for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
+                    translated_transcripts.append(translated_transcript)
+                    pbar.update(i)
+                pbar.finish()
 
-        elif timed_subtitles and ext[1:] == ("raw" or "RAW"):
-            if args.format and args.format != "raw":
-                print(f"Cannot convert raw subtitle format to %s format, subtitle file will be saved in raw format" %args.format)
+                dst_subtitle_filepath = f"{base}.{args.dst_language}.{subtitle_format}"
 
-            regions = []
-            transcripts = []
-            
-            for entry in timed_subtitles:
-                regions.append(entry[0])
-                transcripts.append(entry[1])
+                translation_writer = SubtitleWriter(regions, translated_transcripts, subtitle_format, error_messages_callback=show_error_messages)
+                translation_writer.write(dst_subtitle_filepath)
 
-            prompt = "Translating from %s to %s   : " %(args.src_language.center(8), args.dst_language.center(8))
-            widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
-            pbar = ProgressBar(widgets=widgets, maxval=len(timed_subtitles)).start()
+                print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+                print("")
 
-            subtitle_format = "raw"
-            transcript_translator = SentenceTranslator(src=args.src_language, dst=args.dst_language, error_messages_callback=show_error_messages)
+                completed_tasks += 1
 
-            pool = multiprocessing.Pool(args.concurrency)
+            elif timed_subtitles and ext[1:] == ("raw" or "RAW"):
+                if args.format and args.format != "raw":
+                    print(f"Cannot convert raw subtitle format to %s format, subtitle file will be saved in raw format" %args.format)
 
-            translated_transcripts = []
-            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
-                translated_transcripts.append(translated_transcript)
-                pbar.update(i)
-            pbar.finish()
+                prompt = "Translating from %s to %s   : " %(args.src_language.center(8), args.dst_language.center(8))
+                widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
+                pbar = ProgressBar(widgets=widgets, maxval=len(timed_subtitles)).start()
 
-            dst_subtitle_filepath = f"{base}.{args.dst_language}.{subtitle_format}"
+                subtitle_format = "raw"
+                transcript_translator = SentenceTranslator(src=args.src_language, dst=args.dst_language, error_messages_callback=show_error_messages)
 
-            translation_writer = SubtitleWriter(regions, translated_transcripts, subtitle_format, error_messages_callback=show_error_messages)
-            translation_writer.write(dst_subtitle_filepath)
+                pool = multiprocessing.Pool(args.concurrency)
 
-            print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+                translated_transcripts = []
+                for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
+                    translated_transcripts.append(translated_transcript)
+                    pbar.update(i)
+                pbar.finish()
 
+                dst_subtitle_filepath = f"{base}.{args.dst_language}.{subtitle_format}"
+
+                translation_writer = SubtitleWriter(regions, translated_transcripts, subtitle_format, error_messages_callback=show_error_messages)
+                translation_writer.write(dst_subtitle_filepath)
+
+                print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+                print("")
+
+                completed_tasks += 1
+
+            else:
+                sys.exit(1)
 
         else:
-            sys.exit(1)
+            if ext[1:] == subtitle_format:
+                if timed_subtitles:
+                    print("Nothing to do")
+                    sys.exit(1)
+                else:
+                    sys.exit(1)
+            else:
+                dst_subtitle_filepath = f"{base}.{subtitle_format}"
 
-    else:
-        print("Nothing to do")
-        sys.exit(1)
+                writer = SubtitleWriter(regions, transcripts, subtitle_format, error_messages_callback=show_error_messages)
+                writer.write(dst_subtitle_filepath)
 
+                print(f"Subtitles file saved as      : '{dst_subtitle_filepath}'")
+                print("")
+
+                completed_tasks += 1
+
+    if len(subtitle_filepaths)>0 and completed_tasks == len(subtitle_filepaths):
+        translate_end_time = time.time()
+        translate_elapsed_time = translate_end_time - translate_start_time
+        translate_elapsed_time_seconds = timedelta(seconds=int(translate_elapsed_time))
+        translate_elapsed_time_str = str(translate_elapsed_time_seconds)
+        hour, minute, second = translate_elapsed_time_str.split(":")
+        msg = "Total running time                      : %s:%s:%s" %(hour.zfill(2), minute, second)
+        print(msg)
 
 if __name__ == '__main__':
     sys.exit(main())
