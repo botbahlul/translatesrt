@@ -22,7 +22,7 @@ import shlex
 import shutil
 
 
-VERSION = "0.0.3"
+VERSION = "0.0.4"
 
 
 class Language:
@@ -1252,7 +1252,7 @@ def is_valid_subtitle_file(subtitle_filepath, error_messages_callback=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('subtitle_file_path', help="Subtitle file path you want to translate", nargs='*')
+    parser.add_argument('subtitle_file_path', help="Subtitle file path you want to translate (use wildcard for multiple files or separate them with a space character e.g. \"file 1.srt\" \"file 2.srt\")", nargs='*')
     parser.add_argument('-S', '--src-language', help="Language code of subtitle file you want to translate", default="en")
     parser.add_argument('-D', '--dst-language', help="Desired translation language code for the subtitles", default=None)
     parser.add_argument('-ll', '--list-languages', help="List all supported languages", action='store_true')
