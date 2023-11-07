@@ -1,6 +1,6 @@
 # translatesrt <a href="https://pypi.python.org/pypi/translatesrt"><img src="https://img.shields.io/pypi/v/translatesrt.svg"></img></a>
 
-### Translate subtitle files into another language
+### Translate subtitle files to another language
 translatesrt is a simple command line tool made with python to translate subtitle files to another language.
 
 ### Installation
