@@ -17,7 +17,7 @@ import six
 from datetime import datetime, timedelta
 
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 
 class Language:
@@ -1137,6 +1137,63 @@ class VTTFileReader:
             return
 
 
+class RAWFileReader:
+    def __init__(self, error_messages_callback=None):
+        self.error_messages_callback = error_messages_callback
+        self.timed_subtitles = []
+
+    def __call__(self, subtitle_file_path):
+        try:
+            """
+            Read RAW formatted subtitles file and return subtitles as list of tuples
+            """
+            with open(subtitle_file_path, 'r') as raw_file:
+                lines = raw_file.readlines()
+                # Split the subtitles file into subtitles blocks
+                subtitle_blocks = []
+                block = []
+                for line in lines:
+                    if line.strip() == '':
+                        subtitle_blocks.append(block)
+                        #print("subtitle_blocks = ",  subtitle_blocks)
+                        block = []
+                    else:
+                        block.append(line.strip())
+                        #print("block = ",  block)
+                subtitle_blocks.append(block)
+                #print("subtitle_blocks = ",  subtitle_blocks)
+
+                # Parse each subtitles block and store as tuple in timed_subtitles list
+                for block in subtitle_blocks:
+                    if block:
+                        # Extract subtitles text from subtitles block
+                        start_time_total_seconds = 0
+                        end_time_total_seconds = 0
+                        subtitles = ' '.join(block)
+                        #print("subtitles =", subtitles)
+                        #self.timed_subtitles.append((subtitles))
+                        self.timed_subtitles.append(((start_time_total_seconds, end_time_total_seconds), subtitles))
+                return self.timed_subtitles
+
+        except FileNotFoundError:
+            print(f"Subtitle file '{file_path}' not found.")
+            return []
+
+        except KeyboardInterrupt:
+            if self.error_messages_callback:
+                self.error_messages_callback("Cancelling all tasks")
+            else:
+                print("Cancelling all tasks")
+            return
+
+        except Exception as e:
+            if self.error_messages_callback:
+                self.error_messages_callback(e)
+            else:
+                print(e)
+            return
+
+
 def is_same_language(src, dst, error_messages_callback=None):
     try:
         return src.split("-")[0] == dst.split("-")[0]
@@ -1215,8 +1272,11 @@ def main():
         elif ext[1:] == "json" or ext[1:] == "JSON":
             json_reader = JSONFileReader()
             timed_subtitles = json_reader(args.subtitle_file_path)
+        elif ext[1:] == "raw" or ext[1:] == "RAW":
+            raw_reader = RAWFileReader()
+            timed_subtitles = raw_reader(args.subtitle_file_path)
 
-        if timed_subtitles:
+        if timed_subtitles and ext[1:] != ("raw" or "RAW"):
             regions = []
             transcripts = []
             for entry in timed_subtitles:
@@ -1243,6 +1303,40 @@ def main():
             translation_writer.write(dst_subtitle_filepath)
 
             print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+
+        elif timed_subtitles and ext[1:] == ("raw" or "RAW"):
+            if args.format and args.format != "raw":
+                print(f"Cannot convert raw subtitle format to %s format, subtitle file will be saved in raw format" %args.format)
+
+            regions = []
+            transcripts = []
+            
+            for entry in timed_subtitles:
+                regions.append(entry[0])
+                transcripts.append(entry[1])
+
+            prompt = "Translating from %s to %s   : " %(args.src_language.center(8), args.dst_language.center(8))
+            widgets = [prompt, Percentage(), ' ', Bar(), ' ', ETA()]
+            pbar = ProgressBar(widgets=widgets, maxval=len(timed_subtitles)).start()
+
+            subtitle_format = "raw"
+            transcript_translator = SentenceTranslator(src=args.src_language, dst=args.dst_language, error_messages_callback=show_error_messages)
+
+            pool = multiprocessing.Pool(args.concurrency)
+
+            translated_transcripts = []
+            for i, translated_transcript in enumerate(pool.imap(transcript_translator, transcripts)):
+                translated_transcripts.append(translated_transcript)
+                pbar.update(i)
+            pbar.finish()
+
+            dst_subtitle_filepath = f"{base}.{args.dst_language}.{subtitle_format}"
+
+            translation_writer = SubtitleWriter(regions, translated_transcripts, subtitle_format, error_messages_callback=show_error_messages)
+            translation_writer.write(dst_subtitle_filepath)
+
+            print(f"Translated subtitles file saved as      : '{dst_subtitle_filepath}'")
+
 
         else:
             sys.exit(1)
