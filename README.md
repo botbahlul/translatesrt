@@ -94,3 +94,5 @@ options:
 MIT
 
 Check my other SPEECH RECOGNITIION + TRANSLATE PROJECTS in https://botbahlul.github.io
+
+Buy me coffee : https://sociabuzz.com/botbahlul/tribe
