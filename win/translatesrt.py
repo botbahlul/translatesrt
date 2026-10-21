@@ -24,7 +24,7 @@ from pathlib import Path
 from charset_normalizer import from_bytes
 
 
-VERSION = "0.0.7"
+VERSION = "0.0.8"
 
 class Language:
     def __init__(self):
