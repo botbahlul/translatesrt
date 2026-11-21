@@ -24,7 +24,7 @@ from pathlib import Path
 from charset_normalizer import from_bytes
 
 
-VERSION = "0.0.8"
+VERSION = "0.0.9"
 
 class Language:
     def __init__(self):
@@ -340,7 +340,7 @@ class SentenceTranslator(object):
                 response = requests.get(url, params=params, headers=headers, timeout=timeout)
 
                 if response.status_code != 200:
-                    print("Google Translate HTTP error: %s" % response.status_code)
+                    #print("Google Translate HTTP error: %s" % response.status_code)
                     return None
 
                 try:
@@ -382,7 +382,7 @@ class SentenceTranslator(object):
                 response = requests.get(url, params=params, headers=headers, timeout=timeout)
 
                 if response.status_code != 200:
-                    print("Google Translate HTTP error: %s" % response.status_code)
+                    #print("Google Translate HTTP error: %s" % response.status_code)
                     return None
 
                 try:
